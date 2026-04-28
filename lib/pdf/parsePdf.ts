@@ -1,33 +1,64 @@
-import { PdfReader } from "pdfreader";
+import { createSpans } from "./createSpans";
 
-type PdfItem = {
-  text: string;
-  x: number;
-  y: number;
-  page: number;
-};
+export type Block =
+  | { type: "scene"; text: string }
+  | { type: "character"; name: string }
+  | { type: "dialogue"; character: string; text: string; spans: any[] }
+  | { type: "action"; text: string };
 
-export async function parsePdf(buffer: Buffer): Promise<PdfItem[]> {
-  return new Promise((resolve, reject) => {
-    const items: PdfItem[] = [];
+function isScene(line: string) {
+  return line.startsWith("INT.") || line.startsWith("EXT.");
+}
 
-    new PdfReader().parseBuffer(buffer, (err, item) => {
-      if (err) return reject(err);
+function isCharacter(line: string) {
+  return line === line.toUpperCase() && line.length < 40;
+}
 
-      if (!item) {
-        // DO NOT sort globally — preserve raw spatial structure
-        resolve(items);
-        return;
-      }
+export function parseScript(text: string): Block[] {
+  const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
 
-      if (item.text) {
-        items.push({
-          text: item.text,
-          x: item.x ?? 0,
-          y: item.y ?? 0,
-          page: item.page ?? 1,
-        });
-      }
-    });
-  });
+  const blocks: Block[] = [];
+  let currentChar: string | null = null;
+  let buffer: string[] = [];
+
+  const flush = () => {
+    if (currentChar && buffer.length) {
+      const txt = buffer.join(" ");
+      blocks.push({
+        type: "dialogue",
+        character: currentChar,
+        text: txt,
+        spans: createSpans(txt),
+      });
+    }
+    buffer = [];
+  };
+
+  for (const line of lines) {
+    if (isScene(line)) {
+      flush();
+      currentChar = null;
+      blocks.push({ type: "scene", text: line });
+      continue;
+    }
+
+    if (isCharacter(line)) {
+      flush();
+      currentChar = line;
+      blocks.push({ type: "character", name: line });
+      continue;
+    }
+
+    if (currentChar) {
+      buffer.push(line);
+      continue;
+    }
+
+    flush();
+    blocks.push({ type: "action", text: line });
+  }
+
+  flush();
+
+  return blocks;
 }

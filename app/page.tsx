@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import FileUpload from "@/components/FileUpload";
-import ParsedContent from "@/components/ParsedContent";
+import { ParsedContent } from "@/components/ParsedContent";
 
 export default function Page() {
   const [parsedData, setParsedData] = useState<any>(null);
